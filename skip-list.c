@@ -4,27 +4,28 @@
 #include <string.h>
 #include <errno.h>
 
-typedef int (*SkipListCompare)(void *a, void *b);
+typedef int (*SkipListComparator)(void *a, void *b);
+typedef int (*SkipListDeleteCallback)(void *data, void *user);
 
-typedef struct Node {
-	struct Node *up, *down;
-	struct Node *prev, *next;
+typedef struct SkipNode {
+	struct SkipNode *up, *down;
+	struct SkipNode *prev, *next;
 	void *data;
-} Node;
+} SkipNode;
 
 typedef struct SkipList {
-	Node *start;
-	SkipListCompare cmp;
+	SkipNode *start;
+	SkipListComparator cmp;
 } SkipList;
 
 void
 skip_validate(SkipList *l)
 {
 	int i;
-	Node *h;
+	SkipNode *h;
 	for (h = l->start, i = 0; h != NULL; h = h->down, i++) {
-		Node *p = NULL;
-		Node *n;
+		SkipNode *p = NULL;
+		SkipNode *n;
 		for (n = h; n != NULL; p = n, n = n->next) {
 			/*
 			 * Ensure horizontal sorted order.
@@ -50,13 +51,13 @@ skip_validate(SkipList *l)
 }
 
 void
-skip_dump(SkipList *l)
+skip_print(SkipList *l)
 {
 	int i;
-	Node *h;
+	SkipNode *h;
 	for (h = l->start, i = 0; h != NULL; h = h->down, i++) {
 		fprintf(stderr, "lvl %d -> ", i);
-		Node *n;
+		SkipNode *n;
 		for (n = h; n != NULL; n = n->next) {
 			if (n->data) {
 				fprintf(stderr, "%d, ", *(int *)n->data);
@@ -67,7 +68,7 @@ skip_dump(SkipList *l)
 }
 
 SkipList *
-skip_alloc(SkipListCompare cmp)
+skip_alloc(SkipListComparator cmp)
 {
 	SkipList *l;
 	
@@ -82,10 +83,10 @@ skip_alloc(SkipListCompare cmp)
 
 /*
  * NULL is returned if the SkipList is empty.
- * Otherwise, a pointer to the closest Node less than or equal to data is returned.
+ * Otherwise, a pointer to the closest SkipNode less than or equal to data is returned.
  * If it is equal to, exactMatch is set to 1.
  */
-Node *
+SkipNode *
 skip_find_closest(SkipList *l, void *data, int *exactMatch)
 {
 	*exactMatch = 0;
@@ -93,7 +94,7 @@ skip_find_closest(SkipList *l, void *data, int *exactMatch)
 		return NULL;
 	}
 
-	Node *n = l->start;
+	SkipNode *n = l->start;
 
 	/*
 	 * Go through all levels of the tree.
@@ -116,7 +117,7 @@ skip_find_closest(SkipList *l, void *data, int *exactMatch)
 		}
 
 		/*
-		 * n is the closest Node to our data in the current level.
+		 * n is the closest SkipNode to our data in the current level.
 		 * Now go down a level, if we can.
 		 */
 		if (n->down == NULL) {
@@ -128,7 +129,7 @@ skip_find_closest(SkipList *l, void *data, int *exactMatch)
 	return n;
 }
 
-Node *
+SkipNode *
 skip_insert(SkipList *l, void *data)
 {
 	if (l == NULL || data == NULL) {
@@ -136,7 +137,7 @@ skip_insert(SkipList *l, void *data)
 		return NULL;
 	}
 
-	Node *new;
+	SkipNode *new;
 	if ((new = calloc(1, sizeof(*new))) == NULL) {
 		fprintf(stderr, "Can't allocate node structure: %s\n", strerror(errno));
 		return NULL;
@@ -147,12 +148,12 @@ skip_insert(SkipList *l, void *data)
 	 * Insert into the bottom level of tree.
 	 */
 	int exactMatch = 0;
-	Node *n = skip_find_closest(l, data, &exactMatch);
+	SkipNode *n = skip_find_closest(l, data, &exactMatch);
 	if (n == NULL) {
 		/*
 		 * The skip list is empty!
 		 */
-		Node *newHead;
+		SkipNode *newHead;
 		if ((newHead = calloc(1, sizeof(*newHead))) == NULL) {
 			fprintf(stderr, "Can't allocate head node structure: %s\n", strerror(errno));
 			goto error;
@@ -190,14 +191,14 @@ skip_insert(SkipList *l, void *data)
 		/*
 		 * Search backwards for a way to go up.
 		 */
-		Node * p;
+		SkipNode * p;
 		for (p = n; p->up == NULL && p->prev != NULL; p = p->prev);
 
 		if (p->up == NULL) {
 			/*
 			 * Couldn't find a way to go up -- make a new level!
 			 */
-			Node *newHead;
+			SkipNode *newHead;
 			if ((newHead = calloc(1, sizeof(*newHead))) == NULL) {
 				fprintf(stderr, "Can't allocate head node structure: %s\n", strerror(errno));
 				goto error;
@@ -209,7 +210,7 @@ skip_insert(SkipList *l, void *data)
 		}
 		p = p->up;
 
-		Node *intr;
+		SkipNode *intr;
 		if ((intr = calloc(1, sizeof(*intr))) == NULL) {
 			fprintf(stderr, "Can't allocate intermediate node structure: %s\n", strerror(errno));
 			goto error;
@@ -236,8 +237,12 @@ error:
 }
 
 int
-skip_delete(SkipList *l, Node *n)
+skip_delete(SkipList *l, SkipNode *n, SkipListDeleteCallback callback, void *user)
 {
+	if (callback) {
+		callback(n->data, user);
+	}
+
 	/*
 	 * Unlink everything vertically.
 	 */
@@ -249,7 +254,7 @@ skip_delete(SkipList *l, Node *n)
 			n->next->prev = n->prev;
 		}
 
-		Node *p = n;
+		SkipNode *p = n;
 		n = n->up;
 		free(p);
 	}
@@ -262,7 +267,7 @@ skip_delete(SkipList *l, Node *n)
 			break;
 		}
 
-		Node *p = l->start;
+		SkipNode *p = l->start;
 		l->start = l->start->down;
 		free(p);
 	}
@@ -270,16 +275,70 @@ skip_delete(SkipList *l, Node *n)
 	return 0;
 }
 
-Node *
+void
+skip_free(SkipList **l, SkipListDeleteCallback callback, void *user)
+{
+	if (l == NULL || *l == NULL) {
+		return;
+	}
+
+	/*
+	 * Walk to the bottom.
+	 */
+	SkipNode *head;
+	for (head = (*l)->start; head && head->down != NULL; head = head->down);
+
+	while ((*l)->start) {
+		skip_delete(*l, head->next, callback, user);
+	}
+
+	free(*l);
+	*l = NULL;
+}
+
+SkipNode *
 skip_find(SkipList *l, void *data)
 {
 	int exactMatch = 0;
-	Node *n = skip_find_closest(l, data, &exactMatch);
+	SkipNode *n = skip_find_closest(l, data, &exactMatch);
 
 	if (exactMatch) {
 		return n;
 	}
 	return NULL;
+}
+
+/*
+ * The input SkipNode 'n' keeps track of the iterator's place in the SkipList.
+ * The first call to the iterator (*n) should equal NULL.
+ * On success, 1 is returned and 'n' will point to the next SkipNode. Or, 0 is
+ *   returned and 'n' will be NULL which means it has reached the end of the SkipList.
+ * On error, -1 is returned.
+ */
+int
+skip_iterate(SkipList *l, SkipNode **n)
+{
+	if (l == NULL || n == NULL) {
+		fprintf(stderr, "%s(%p,%p): Invalid arguments?!\n", __func__, l, n);
+		return -1;
+	}
+
+	if (*n == NULL) {
+		/*
+		 * Walk to the bottom.
+		 */
+		for (*n = l->start; *n && (*n)->down != NULL; *n = (*n)->down);
+	}
+
+	/*
+	 * Advance to the next SkipNode.
+	 */
+	*n = (*n)->next;
+
+	if (*n == NULL) {
+		return 0;
+	}
+	return 1;
 }
 
 int
@@ -315,19 +374,25 @@ int main()
 	}
 	fprintf(stderr, "\n");
 
-	skip_dump(l);
+	skip_print(l);
 #endif
 
 	for (i = 0; i < N; i++) {
-		Node *n;
+		SkipNode *n;
 		if ((n = skip_find(l, array+i)) == NULL) {
 			//abort();
 			continue;
 		}
-		//skip_delete(l, n);
+		//skip_delete(l, n, NULL, NULL);
 	}
 
-	skip_dump(l);
+	SkipNode *n = NULL;
+	while (skip_iterate(l, &n) > 0) {
+		fprintf(stderr, "%d, ", *(int *)n->data);
+	}
+	fprintf(stderr, "\n");
+
+	skip_free(&l, NULL, NULL);
 
 	return 0;
 }
