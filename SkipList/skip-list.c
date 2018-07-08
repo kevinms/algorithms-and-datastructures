@@ -19,7 +19,7 @@ typedef struct SkipList {
 } SkipList;
 
 void
-skip_validate(SkipList *l)
+skipValidate(SkipList *l)
 {
 	int i;
 	SkipNode *h;
@@ -51,7 +51,7 @@ skip_validate(SkipList *l)
 }
 
 void
-skip_print(SkipList *l)
+skipPrint(SkipList *l)
 {
 	int i;
 	SkipNode *h;
@@ -68,7 +68,7 @@ skip_print(SkipList *l)
 }
 
 SkipList *
-skip_alloc(SkipListComparator cmp)
+skipAlloc(SkipListComparator cmp)
 {
 	SkipList *l;
 	
@@ -87,7 +87,7 @@ skip_alloc(SkipListComparator cmp)
  * If it is equal to, exactMatch is set to 1.
  */
 SkipNode *
-skip_find_closest(SkipList *l, void *data, int *exactMatch)
+skipFind_closest(SkipList *l, void *data, int *exactMatch)
 {
 	*exactMatch = 0;
 	if (l->start == NULL) {
@@ -130,7 +130,7 @@ skip_find_closest(SkipList *l, void *data, int *exactMatch)
 }
 
 SkipNode *
-skip_insert(SkipList *l, void *data)
+skipInsert(SkipList *l, void *data)
 {
 	if (l == NULL || data == NULL) {
 		fprintf(stderr, "%s(%p, %p): Invalid arguments?!\n", __func__, l, data);
@@ -148,7 +148,7 @@ skip_insert(SkipList *l, void *data)
 	 * Insert into the bottom level of tree.
 	 */
 	int exactMatch = 0;
-	SkipNode *n = skip_find_closest(l, data, &exactMatch);
+	SkipNode *n = skipFind_closest(l, data, &exactMatch);
 	if (n == NULL) {
 		/*
 		 * The skip list is empty!
@@ -237,7 +237,7 @@ error:
 }
 
 int
-skip_delete(SkipList *l, SkipNode *n, SkipListDeleteCallback callback, void *user)
+skipDelete(SkipList *l, SkipNode *n, SkipListDeleteCallback callback, void *user)
 {
 	if (callback) {
 		callback(n->data, user);
@@ -276,7 +276,7 @@ skip_delete(SkipList *l, SkipNode *n, SkipListDeleteCallback callback, void *use
 }
 
 void
-skip_free(SkipList **l, SkipListDeleteCallback callback, void *user)
+skipFree(SkipList **l, SkipListDeleteCallback callback, void *user)
 {
 	if (l == NULL || *l == NULL) {
 		return;
@@ -289,7 +289,7 @@ skip_free(SkipList **l, SkipListDeleteCallback callback, void *user)
 	for (head = (*l)->start; head && head->down != NULL; head = head->down);
 
 	while ((*l)->start) {
-		skip_delete(*l, head->next, callback, user);
+		skipDelete(*l, head->next, callback, user);
 	}
 
 	free(*l);
@@ -297,10 +297,10 @@ skip_free(SkipList **l, SkipListDeleteCallback callback, void *user)
 }
 
 SkipNode *
-skip_find(SkipList *l, void *data)
+skipFind(SkipList *l, void *data)
 {
 	int exactMatch = 0;
-	SkipNode *n = skip_find_closest(l, data, &exactMatch);
+	SkipNode *n = skipFind_closest(l, data, &exactMatch);
 
 	if (exactMatch) {
 		return n;
@@ -316,7 +316,7 @@ skip_find(SkipList *l, void *data)
  * On error, -1 is returned.
  */
 int
-skip_iterate(SkipList *l, SkipNode **n)
+skipIterate(SkipList *l, SkipNode **n)
 {
 	if (l == NULL || n == NULL) {
 		fprintf(stderr, "%s(%p,%p): Invalid arguments?!\n", __func__, l, n);
@@ -352,18 +352,18 @@ int main()
 	srand48(time(NULL));
 	srand(time(NULL));
 
-	SkipList *l = skip_alloc(cmp_int);
+	SkipList *l = skipAlloc(cmp_int);
 
 	int i, N = 1000;
 	int *array = malloc(sizeof(*array) * N);
 	for (i = 0; i < N; i++) {
 		array[i] = rand() % N;
-		skip_insert(l, array+i);
+		skipInsert(l, array+i);
 	}
-	skip_validate(l);
+	skipValidate(l);
 
 	for (i = 0; i < N; i++) {
-		if (skip_find(l, array+i) == NULL) {
+		if (skipFind(l, array+i) == NULL) {
 			abort();
 		}
 	}
@@ -374,25 +374,25 @@ int main()
 	}
 	fprintf(stderr, "\n");
 
-	skip_print(l);
+	skipPrint(l);
 #endif
 
 	for (i = 0; i < N; i++) {
 		SkipNode *n;
-		if ((n = skip_find(l, array+i)) == NULL) {
+		if ((n = skipFind(l, array+i)) == NULL) {
 			//abort();
 			continue;
 		}
-		//skip_delete(l, n, NULL, NULL);
+		//skipDelete(l, n, NULL, NULL);
 	}
 
 	SkipNode *n = NULL;
-	while (skip_iterate(l, &n) > 0) {
+	while (skipIterate(l, &n) > 0) {
 		fprintf(stderr, "%d, ", *(int *)n->data);
 	}
 	fprintf(stderr, "\n");
 
-	skip_free(&l, NULL, NULL);
+	skipFree(&l, NULL, NULL);
 
 	return 0;
 }
