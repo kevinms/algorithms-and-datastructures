@@ -87,7 +87,7 @@ skipAlloc(SkipListComparator cmp)
  * If it is equal to, exactMatch is set to 1.
  */
 SkipNode *
-skipFind_closest(SkipList *l, void *data, int *exactMatch)
+skipFindClosest(SkipList *l, void *data, int *exactMatch)
 {
 	*exactMatch = 0;
 	if (l->start == NULL) {
@@ -148,7 +148,7 @@ skipInsert(SkipList *l, void *data)
 	 * Insert into the bottom level of tree.
 	 */
 	int exactMatch = 0;
-	SkipNode *n = skipFind_closest(l, data, &exactMatch);
+	SkipNode *n = skipFindClosest(l, data, &exactMatch);
 	if (n == NULL) {
 		/*
 		 * The skip list is empty!
@@ -300,7 +300,7 @@ SkipNode *
 skipFind(SkipList *l, void *data)
 {
 	int exactMatch = 0;
-	SkipNode *n = skipFind_closest(l, data, &exactMatch);
+	SkipNode *n = skipFindClosest(l, data, &exactMatch);
 
 	if (exactMatch) {
 		return n;
@@ -342,7 +342,7 @@ skipIterate(SkipList *l, SkipNode **n)
 }
 
 int
-cmp_int(void *x, void *y)
+cmpInt(void *x, void *y)
 {
 	return *(int *)x - *(int *)y;
 }
@@ -352,7 +352,7 @@ int main()
 	srand48(time(NULL));
 	srand(time(NULL));
 
-	SkipList *l = skipAlloc(cmp_int);
+	SkipList *l = skipAlloc(cmpInt);
 
 	int i, N = 1000;
 	int *array = malloc(sizeof(*array) * N);
