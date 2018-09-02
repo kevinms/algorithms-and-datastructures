@@ -2,12 +2,13 @@ CC = gcc
 CFLAGS = -Wall -g -Werror # -DDEBUG
 LDFLAGS = -lm
 
-SOURCES=skip-list.c
+BINARY=test
+SOURCES=skiplist.c test.c
 OBJECTS=$(SOURCES:.c=.o)
 
-all: skip-list
+all: $(BINARY)
 
-skip-list: $(OBJECTS)
+$(BINARY): $(OBJECTS)
 	gcc $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@
 
 %.o : %.c
@@ -15,4 +16,4 @@ skip-list: $(OBJECTS)
 
 .PHONY: clean
 clean:
-	rm -f $(OBJECTS) skip-list
+	rm -f $(OBJECTS) $(BINARY)
