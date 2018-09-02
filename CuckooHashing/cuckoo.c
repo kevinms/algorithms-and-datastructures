@@ -1,3 +1,5 @@
+#include "cuckoo.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>
@@ -10,23 +12,7 @@
 #define debug(...)
 #endif
 
-typedef struct CuckooElement {
-	void *key;
-	uint64_t len;
-	void *data;
-} CuckooElement;
-
-typedef int (*CuckooDeleteCallback)(CuckooElement *e);
-
-typedef struct CuckooTable {
-	struct CuckooElement *table;
-	uint64_t size;
-	CuckooDeleteCallback deleteCallback;
-} CuckooTable;
-
-int cuckooResize(CuckooTable *t, uint64_t newSize);
-
-uint64_t
+static uint64_t
 polyHash(void *key, uint64_t len, uint64_t p, uint64_t M)
 {
 	uint64_t hash = 0;
@@ -40,13 +26,13 @@ polyHash(void *key, uint64_t len, uint64_t p, uint64_t M)
 #define PRIME1 3851
 #define PRIME2 7477
 
-uint64_t
+static uint64_t
 h1(void *key, uint64_t len, uint64_t M)
 {
 	return polyHash(key, len, PRIME1, M);
 }
 
-uint64_t
+static uint64_t
 h2(void *key, uint64_t len, uint64_t M)
 {
 	/*
@@ -59,29 +45,11 @@ h2(void *key, uint64_t len, uint64_t M)
 typedef uint64_t (*hashFunction)(void *key, uint64_t len, uint64_t tableSize);
 hashFunction hashFuncs[2] = {h1, h2};
 
-CuckooTable *
-cuckooAlloc(uint64_t initialSize, CuckooDeleteCallback deleteCallback)
-{
-	CuckooTable *t;
-
-	if (initialSize < 4) {
-		debug("The table size must be 2 or greater.\n");
-		abort();
-	}
-
-	t = calloc(1, sizeof(*t));
-	t->table = calloc(initialSize, sizeof(*t->table));
-	t->size = initialSize;
-	t->deleteCallback = deleteCallback;
-
-	return t;
-}
-
 /*
  * 0 exact match
  * 1 they differ
  */
-inline int
+static inline int
 cuckooCompare(CuckooElement *e, void *key, uint64_t len)
 {
 	if ((e->key != NULL) &&
@@ -92,7 +60,7 @@ cuckooCompare(CuckooElement *e, void *key, uint64_t len)
 	return 1;
 }
 
-inline void
+static inline void
 cuckooStore(CuckooElement *e, void *key, uint64_t len, void *data)
 {
 	e->key = key;
@@ -104,7 +72,7 @@ cuckooStore(CuckooElement *e, void *key, uint64_t len, void *data)
  * 0 Success
  * 1 Need to resize table
  */
-int
+static int
 cuckooEvict(CuckooTable *t, CuckooElement *e, uint64_t c)
 {
 	CuckooElement *other;
@@ -137,6 +105,53 @@ cuckooEvict(CuckooTable *t, CuckooElement *e, uint64_t c)
 	 * That should never happen!
 	 */
 	abort();
+}
+
+static int
+cuckooResize(CuckooTable *t, uint64_t newSize)
+{
+	if (newSize < 4) {
+		debug("The table size must be 2 or greater.\n");
+		abort();
+	}
+	debug("Resize to %" PRIu64 "\n", t->size * 2);
+
+	CuckooElement *oldTable = t->table;
+	uint64_t oldSize = t->size;
+	t->table = calloc(newSize, sizeof(*t->table));
+	t->size = newSize;
+
+	int i;
+	for (i = 0; i < oldSize; i++) {
+		CuckooElement *e = oldTable + i;
+		if (e->key == NULL) {
+			continue;
+		}
+
+		cuckooInsert(t, e->key, e->len, e->data);
+	}
+
+	free(oldTable);
+
+	return 0;
+}
+
+CuckooTable *
+cuckooAlloc(uint64_t initialSize, CuckooDeleteCallback deleteCallback)
+{
+	CuckooTable *t;
+
+	if (initialSize < 4) {
+		debug("The table size must be 2 or greater.\n");
+		abort();
+	}
+
+	t = calloc(1, sizeof(*t));
+	t->table = calloc(initialSize, sizeof(*t->table));
+	t->size = initialSize;
+	t->deleteCallback = deleteCallback;
+
+	return t;
 }
 
 /*
@@ -211,79 +226,30 @@ cuckooDelete(CuckooTable *t, void *key, uint64_t len, CuckooDeleteCallback delet
 {
 	CuckooElement *e = cuckooLookup(t, key, len);
 	void *data = e->data;
-	deleteCallback(e);
+	if (deleteCallback) {
+		deleteCallback(e);
+	}
 	cuckooStore(e, NULL, 0, NULL);
 	return data;
 }
 
 void
-cuckooFree(CuckooTable *t)
+cuckooFree(CuckooTable **t)
 {
+	if (t == NULL) {
+		return;
+	}
+
 	int i;
-	for (i = 0; i < t->size; i++) {
-		CuckooElement *e = t->table + i;
-		t->deleteCallback(e);
+	for (i = 0; i < (*t)->size; i++) {
+		CuckooElement *e = (*t)->table + i;
+		if ((*t)->deleteCallback) {
+			(*t)->deleteCallback(e);
+		}
 		cuckooStore(e, NULL, 0, NULL);
 	}
-}
 
-int
-cuckooResize(CuckooTable *t, uint64_t newSize)
-{
-	if (newSize < 4) {
-		debug("The table size must be 2 or greater.\n");
-		abort();
-	}
-	debug("Resize to %" PRIu64 "\n", t->size * 2);
-
-	CuckooElement *oldTable = t->table;
-	uint64_t oldSize = t->size;
-	t->table = calloc(newSize, sizeof(*t->table));
-	t->size = newSize;
-
-	int i;
-	for (i = 0; i < oldSize; i++) {
-		CuckooElement *e = oldTable + i;
-		if (e->key == NULL) {
-			continue;
-		}
-
-		cuckooInsert(t, e->key, e->len, e->data);
-	}
-
-	free(oldTable);
-
-	return 0;
-}
-
-int main()
-{
-	CuckooTable *t = cuckooAlloc(4, NULL);
-
-	char *strings[] = {
-		"scott",
-		"kevin",
-		"karl",
-		"archie",
-		"bob"
-	};
-
-	int n = sizeof(strings) / sizeof(*strings);
-	int i;
-	for (i = 0; i < n; i++) {
-		printf("Insert: %s\n", strings[i]);
-		cuckooInsert(t, strings[i], strlen(strings[i]), NULL);
-	}
-	printf("\n");
-
-	for (i = 0; i < n; i++) {
-		CuckooElement *e = cuckooLookup(t, strings[i], strlen(strings[i]));
-		if (e == NULL) {
-			debug("Can't find: %s\n", strings[i]);
-			abort();
-		}
-		printf("Found: %s\n", (char *)e->key);
-	}
-
-	return 0;
+	free((*t)->table);
+	free(*t);
+	*t = NULL;
 }

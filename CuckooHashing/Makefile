@@ -2,12 +2,13 @@ CC = gcc
 CFLAGS = -Wall -g -Werror # -DDEBUG
 LDFLAGS = -lm
 
-SOURCES=cuckoo.c
+BINARY=test
+SOURCES=cuckoo.c test.c
 OBJECTS=$(SOURCES:.c=.o)
 
-all: cuckoo
+all: $(BINARY)
 
-cuckoo: $(OBJECTS)
+$(BINARY): $(OBJECTS)
 	gcc $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@
 
 %.o : %.c
@@ -15,4 +16,4 @@ cuckoo: $(OBJECTS)
 
 .PHONY: clean
 clean:
-	rm -f $(OBJECTS) cuckoo
+	rm -f $(OBJECTS) $(BINARY)
